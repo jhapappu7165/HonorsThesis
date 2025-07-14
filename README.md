@@ -25,7 +25,6 @@ The project aims to address a critical security vulnerability — **prompt injec
 
 - [**Pappu Jha**](https://jhapappu.com.np) – Researcher  
 - [**Hanzla Hamid**](https://www.linkedin.com/in/hanzla-hamid-b60551328/) – Researcher  
-- [**Ashim Dahal**](https://ashimdahal.com.np/) – Research Mentor
 - [**Dr. Nick Rahimi**](https://sites.google.com/view/nickrahimi/home) – Research Supervisor  
 
 ---
