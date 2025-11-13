@@ -23,9 +23,8 @@ The project aims to address a critical security vulnerability — **prompt injec
 
 ## 👨‍🔬 Researchers
 
-- [**Pappu Jha**](https://jhapappu.com.np) – Researcher  
-- [**Hanzla Hamid**](https://www.linkedin.com/in/hanzla-hamid-b60551328/) – Researcher  
-- [**Dr. Nick Rahimi**](https://sites.google.com/view/nickrahimi/home) – Research Supervisor  
+- [**Pappu Jha**](https://jhapappu.com.np) – Research Assistant
+- [**Dr. Nick Rahimi**](https://sites.google.com/view/nickrahimi/home) – Associate Professor  
 
 ---
 
