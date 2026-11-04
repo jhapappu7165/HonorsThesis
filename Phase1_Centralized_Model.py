@@ -8,6 +8,14 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sentence_transformers import SentenceTransformer
 from sklearn.linear_model import LogisticRegression
+import torch
+from torch.utils.data import Dataset, DataLoader
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification
+)
+from tqdm.auto import tqdm
+from copy import deepcopy
 
 
 ds = pd.read_csv('/Workspace/Users/w10168315@usm.edu/HonorsThesis/final_CLEANED_dataset.csv')
@@ -183,6 +191,7 @@ selected_thresholds = {}
 
 
 '''Model 1 — Rule-based prompt-injection detection'''
+print('\n')
 
 attack_patterns = [
     r"\bignore (all |any |your )?(previous|prior) instructions\b",
@@ -210,7 +219,8 @@ rule_val_pred = val_df["text"].apply(rule_based_predict).to_numpy()
 validation_results["Rule-based"] = evaluate_predictions(val_df["label"], rule_val_pred)
 print("Rule-based validation results:", validation_results["Rule-based"])
 
-''' OUTPUT of Rule-based prompt-injection detection:
+
+'''***OUTPUT (VALIDATION PERFORMANCE)***
 {'Accuracy': 0.6366576819407008, 'Precision': 1.0, 'Recall': 0.041251778093883355, 'F1': 0.07923497267759563, 'FPR': np.float64(0.0)} '''
 
 
@@ -219,7 +229,7 @@ print("Rule-based validation results:", validation_results["Rule-based"])
 
 
 ''' MODEL 2: TF-IDF + Logistic Regression'''
-
+print('\n')
 tfidf_model = Pipeline([
     ("tfidf", TfidfVectorizer(
         ngram_range=(1, 2),
@@ -263,7 +273,7 @@ print("TF-IDF + Logistic Regression: ", validation_results["TF-IDF + LR"])
 
 
 '''
-### OUTPUT ###
+***OUTPUT (VALIDATION PERFORMANCE)***
 Selected threshold: 0.3699999999999999
 TF-IDF + Logistic Regression:  {'Accuracy': 0.8964959568733154, 'Precision': 0.8016528925619835, 'Recall': 0.9658605974395448, 'F1': 0.8761290322580645, 'FPR': np.float64(0.14583333333333334)}
 '''
@@ -274,6 +284,7 @@ TF-IDF + Logistic Regression:  {'Accuracy': 0.8964959568733154, 'Precision': 0.8
 ''' Model 3 — Sentence embeddings + Logistic Regression
 Converts prompts into numerical representations of their meaning & trains a classifier on those representations '''
 
+print('\n')
 embedding_model = SentenceTransformer(
     "sentence-transformers/all-MiniLM-L6-v2"
 )
@@ -327,7 +338,264 @@ print("Selected threshold:", emb_threshold)
 print("Sentence embeddings + Logistic Regression: ", validation_results["Embeddings + LR"])
 
 '''
-# OUTPUT
+***OUTPUT (VALIDATION PERFORMANCE)***
 Selected threshold: 0.43999999999999984
 Sentence embeddings + Logistic Regression:  {'Accuracy': 0.8776280323450135, 'Precision': 0.8148148148148148, 'Recall': 0.8762446657183499, 'F1': 0.8444139821795751, 'FPR': np.float64(0.12152777777777778)}
 '''
+
+
+
+
+
+
+# ''' Model 4 — Fine-tuned DistilBERT '''
+# print('\n')
+# MODEL_NAME = "distilbert/distilbert-base-uncased"
+# MAX_LENGTH = 256
+# BATCH_SIZE = 16
+# EPOCHS = 3
+# LEARNING_RATE = 2e-5
+
+# torch.manual_seed(SEED)
+# device = torch.device(
+#     "cuda" if torch.cuda.is_available() else "cpu"
+# )
+
+# print("Device:", device)
+
+# tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+
+# class PromptDataset(Dataset):
+#     def __init__(self, dataframe):
+#         self.texts = dataframe["text"].tolist()
+#         self.labels = dataframe["label"].tolist()
+
+#     def __len__(self):
+#         return len(self.texts)
+
+#     def __getitem__(self, idx):
+#         encoded = tokenizer(
+#             self.texts[idx],
+#             truncation=True,
+#             padding="max_length",
+#             max_length=MAX_LENGTH,
+#             return_tensors="pt"
+#         )
+
+#         return {
+#             "input_ids": encoded["input_ids"].squeeze(0),
+#             "attention_mask": encoded["attention_mask"].squeeze(0),
+#             "labels": torch.tensor(
+#                 self.labels[idx], dtype=torch.long
+#             )
+#         }
+
+# train_loader = DataLoader(
+#     PromptDataset(train_df),
+#     batch_size=BATCH_SIZE,
+#     shuffle=True
+# )
+
+# val_loader = DataLoader(
+#     PromptDataset(val_df),
+#     batch_size=BATCH_SIZE,
+#     shuffle=False
+# )
+
+# bert_model = AutoModelForSequenceClassification.from_pretrained(
+#     MODEL_NAME,
+#     num_labels=2
+# ).to(device)
+
+# optimizer = torch.optim.AdamW(
+#     bert_model.parameters(),
+#     lr=LEARNING_RATE
+# )
+
+# def predict_transformer(model, loader):
+#     model.eval()
+#     probabilities = []
+
+#     with torch.no_grad():
+#         for batch in loader:
+#             inputs = {
+#                 "input_ids": batch["input_ids"].to(device),
+#                 "attention_mask": batch["attention_mask"].to(device)
+#             }
+
+#             outputs = model(**inputs)
+#             probs = torch.softmax(
+#                 outputs.logits, dim=1
+#             )[:, 1]
+
+#             probabilities.extend(probs.cpu().numpy())
+
+#     return np.array(probabilities)
+
+# best_f1 = -1
+# best_state = None
+
+# for epoch in range(EPOCHS):
+#     bert_model.train()
+#     total_loss = 0
+
+#     for batch in tqdm(
+#         train_loader,
+#         desc=f"Epoch {epoch + 1}/{EPOCHS}"
+#     ):
+#         optimizer.zero_grad()
+
+#         inputs = {
+#             key: value.to(device)
+#             for key, value in batch.items()
+#         }
+
+#         outputs = bert_model(**inputs)
+#         loss = outputs.loss
+
+#         loss.backward()
+#         optimizer.step()
+
+#         total_loss += loss.item()
+
+#     # Evaluate on validation data
+#     val_probs = predict_transformer(
+#         bert_model, val_loader
+#     )
+
+#     threshold = select_threshold(
+#         val_df["label"], val_probs
+#     )
+
+#     val_pred = (val_probs >= threshold).astype(int)
+
+#     metrics = evaluate_predictions(
+#         val_df["label"], val_pred
+#     )
+
+#     print(
+#         f"Epoch {epoch + 1}: "
+#         f"Loss={total_loss/len(train_loader):.4f}, "
+#         f"Validation F1={metrics['F1']:.4f}"
+#     )
+
+#     if metrics["F1"] > best_f1:
+#         best_f1 = metrics["F1"]
+#         best_state = deepcopy(bert_model.state_dict())
+
+# # Restore the best validation checkpoint
+# bert_model.load_state_dict(best_state)
+
+# # Select final threshold on validation data
+# bert_val_probs = predict_transformer(
+#     bert_model, val_loader
+# )
+
+# bert_threshold = select_threshold(
+#     val_df["label"], bert_val_probs
+# )
+
+# selected_thresholds["DistilBERT"] = bert_threshold
+
+# validation_results["DistilBERT"] = evaluate_predictions(
+#     val_df["label"],
+#     (bert_val_probs >= bert_threshold).astype(int)
+# )
+
+# # Save the trained model
+# bert_model.save_pretrained("distilbert_prompt_detector")
+# tokenizer.save_pretrained("distilbert_prompt_detector")
+
+# print("DistilBERT model saved successfully.")
+# print(validation_results["DistilBERT"])
+
+
+
+
+
+''' Generate a comparison table '''
+print('\n')
+validation_table = pd.DataFrame(
+    validation_results
+).T
+
+validation_table = validation_table.sort_values(
+    "F1", ascending=False
+)
+
+print("Validation performance:")
+display(validation_table.round(4))
+
+validation_table.to_csv(
+    "baseline_validation_results.csv"
+)
+
+
+
+
+''' Final test comparison '''
+print('\n')
+
+test_results = {}
+
+# Model 1: Rule-based
+rule_test_pred = test_df["text"].apply(
+    rule_based_predict
+).to_numpy()
+
+test_results["Rule-based"] = evaluate_predictions(
+    test_df["label"], rule_test_pred
+)
+
+# Model 2: TF-IDF + Logistic Regression
+tfidf_test_probs = tfidf_model.predict_proba(
+    test_df["text"]
+)[:, 1]
+
+test_results["TF-IDF + LR"] = evaluate_predictions(
+    test_df["label"],
+    (tfidf_test_probs >= selected_thresholds["TF-IDF + LR"]).astype(int)
+)
+
+# Model 3: Sentence embeddings + Logistic Regression
+X_test_emb = embedding_model.encode(
+    test_df["text"].tolist(),
+    batch_size=32,
+    show_progress_bar=True,
+    normalize_embeddings=True
+)
+
+emb_test_probs = embedding_classifier.predict_proba(
+    X_test_emb
+)[:, 1]
+
+test_results["Embeddings + LR"] = evaluate_predictions(
+    test_df["label"],
+    (emb_test_probs >= selected_thresholds["Embeddings + LR"]).astype(int)
+)
+
+# # Model 4: DistilBERT
+# test_loader = DataLoader(
+#     PromptDataset(test_df),
+#     batch_size=BATCH_SIZE,
+#     shuffle=False
+# )
+
+# bert_test_probs = predict_transformer(
+#     bert_model, test_loader
+# )
+
+# test_results["DistilBERT"] = evaluate_predictions(
+#     test_df["label"],
+#     (bert_test_probs >= selected_thresholds["DistilBERT"]).astype(int)
+# )
+
+# Final comparison
+test_table = pd.DataFrame(test_results).T
+test_table = test_table.sort_values(
+    "F1", ascending=False
+)
+
+display(test_table.round(4))
+
+test_table.to_csv("baseline_test_results.csv")
